@@ -15,3 +15,6 @@ Check the run under the repo's Actions tab if the site does not change.
 
 ## Manual option
 `npm install` then `npm run build-data -- path/to/file.xlsx` rewrites `public/data.js`.
+
+## GM reports
+Click **Download GM report** on the live site to save a standalone HTML file for Deepak, Rinju or Aanson (or all three). Each file shows only that GM's data, has no upload option, and can be sent by email or WhatsApp and opened in any browser. Reports reflect the data currently loaded in the dashboard.

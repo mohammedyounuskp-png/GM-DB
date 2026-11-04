@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GM Sales Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: sticky command bar (title, data status, upload) -> tabs -> filter row -> KPI strip -> pivot tables */
+:root{
+  --bg:#f3f4f2; --surface:#ffffff; --surface2:#f8f9f7; --ink:#14181d; --ink2:#4a5360; --ink3:#7b8491; --line:#dde1dc; --line2:#eceee9;
+  --accent:#1f5fbf; --accent-ink:#ffffff; --accent-soft:#e6eefa;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  --good:#18794e; --good-bg:#e3f4ea; --warn:#9a6700; --warn-bg:#fbf0d0; --bad:#c0302f; --bad-bg:#fbe5e4;
+  --font:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; --cond:'IBM Plex Sans Condensed','IBM Plex Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101315; --surface:#181c1f; --surface2:#1d2226; --ink:#eceeea; --ink2:#b4bbc2; --ink3:#868f98; --line:#2b3237; --line2:#242a2e;
+  --accent:#5b9bf0; --accent-ink:#0b1520; --accent-soft:#1b2a40;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --good:#4cc38a; --good-bg:#12301f; --warn:#e3b341; --warn-bg:#33290d; --bad:#f07a78; --bad-bg:#3a1817; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101315; --surface:#181c1f; --surface2:#1d2226; --ink:#eceeea; --ink2:#b4bbc2; --ink3:#868f98; --line:#2b3237; --line2:#242a2e;
+  --accent:#5b9bf0; --accent-ink:#0b1520; --accent-soft:#1b2a40;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --good:#4cc38a; --good-bg:#12301f; --warn:#e3b341; --warn-bg:#33290d; --bad:#f07a78; --bad-bg:#3a1817; color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+button,select,input{font:inherit;color:inherit}
+.wrap{max-width:1480px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.num,td.n,th.n{font-variant-numeric:tabular-nums}
+/* top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-top:18px}
+.top h1{font-family:var(--cond);font-weight:600;font-size:22px;letter-spacing:.01em;margin:0;text-wrap:balance}
+.status{flex:1 1 280px;min-width:0;color:var(--ink2);font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.status b{color:var(--ink);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--ink2)}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block}
+.pill.custom i{background:var(--s2)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.btn:hover{border-color:var(--ink3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink2);padding:7px 8px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* upload panel */
+.upload{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px}
+.drop{border:1.5px dashed var(--ink3);border-radius:10px;padding:22px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:var(--surface2)}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+.drop{position:relative}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.upload h2{margin:0 0 6px;font-size:15px;font-weight:600}
+.upload ol{margin:6px 0 0;padding-left:18px;color:var(--ink2);display:flex;flex-direction:column;gap:4px}
+.upmsg{min-height:20px;font-size:13px}
+.upmsg.err{color:var(--bad)} .upmsg.ok{color:var(--good)}
+.spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:0;background:none;padding:10px 16px;cursor:pointer;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;font-weight:500}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fwrap{position:relative}
+.fbtn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;cursor:pointer;display:flex;gap:6px;align-items:baseline;max-width:230px}
+.fbtn .l{color:var(--ink3);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--cond)}
+.fbtn .v{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fbtn.on{border-color:var(--accent);background:var(--accent-soft)}
+.pop{position:absolute;top:calc(100% + 4px);left:0;z-index:30;width:260px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:8px;display:flex;flex-direction:column;gap:6px}
+.pop input[type=search]{width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface2)}
+.pop .acts{display:flex;justify-content:space-between;font-size:12px}
+.pop .acts button{background:none;border:0;color:var(--accent);cursor:pointer;padding:2px}
+.opts{max-height:240px;overflow:auto;display:flex;flex-direction:column}
+.opts label{display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:5px;cursor:pointer}
+.opts label:hover{background:var(--surface2)}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.kpi{background:var(--surface);padding:12px 14px;min-width:0}
+.kpi .l{font-family:var(--cond);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.kpi .v{font-size:22px;font-weight:500;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi .v small{font-size:12px;color:var(--ink3);font-weight:400;margin-left:3px}
+/* panels */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0;display:flex;flex-direction:column}
+.ph{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:12px 14px 0}
+.ph h3{margin:0;font-size:14px;font-weight:600}
+.ph .sub{color:var(--ink3);font-size:12px}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,.seg{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:4px 8px}
+.seg{display:inline-flex;padding:2px;gap:2px}
+.seg button{border:0;background:none;padding:3px 10px;border-radius:5px;cursor:pointer;color:var(--ink2)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+/* tables */
+.tw{overflow:auto;max-height:560px;margin:10px 0 0;border-top:1px solid var(--line2)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+th,td{padding:6px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line2)}
+th:first-child,td:first-child{text-align:left}
+thead th{position:sticky;top:0;background:var(--surface2);z-index:2;font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);cursor:default}
+thead th.sortable{cursor:pointer} thead th.sortable:hover{color:var(--ink)}
+th .ar{color:var(--accent);margin-left:3px}
+tbody tr:hover td{background:var(--surface2)}
+tr.fy td{font-weight:600;background:var(--surface2);cursor:pointer}
+tr.fy td:first-child::before{content:"\25BE";display:inline-block;width:16px;color:var(--ink3)}
+tr.fy.closed td:first-child::before{content:"\25B8"}
+tr.mo td:first-child{padding-left:30px;color:var(--ink2)}
+tfoot td{position:sticky;bottom:0;background:var(--surface2);font-weight:600;border-top:1px solid var(--line);border-bottom:0}
+.bar{position:relative}
+.bar::after{content:"";position:absolute;left:10px;bottom:2px;height:3px;width:calc((100% - 20px)*var(--w,0));background:var(--s1);opacity:.55;border-radius:2px}
+.tag{display:inline-block;min-width:54px;padding:1px 7px;border-radius:5px;font-weight:500;text-align:center}
+.tag.good{background:var(--good-bg);color:var(--good)} .tag.warn{background:var(--warn-bg);color:var(--warn)} .tag.bad{background:var(--bad-bg);color:var(--bad)}
+.search{border:1px solid var(--line);background:var(--surface2);border-radius:7px;padding:4px 8px;width:150px}
+.legend-note{color:var(--ink3);font-size:12px;padding:8px 14px 12px;display:flex;gap:12px;flex-wrap:wrap}
+.empty{padding:40px;text-align:center;color:var(--ink3)}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}.upload{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>GM Sales Dashboard</h1>
+    <div class="status" id="status"></div>
+    <div class="fwrap" id="dlWrap"><button class="btn" id="dlBtn" aria-haspopup="true">Download GM report</button></div>
+    <button class="btn primary" id="upBtn" aria-expanded="false" aria-controls="upPanel">Update data</button>
+  </header>
+
+  <section class="upload" id="upPanel" hidden>
+    <div>
+      <h2>Refresh the dashboard with a new workbook</h2>
+      <p style="margin:0;color:var(--ink2)">Upload your updated Excel file. Every table and total is recalculated from the raw sheets, so you never touch the pivots.</p>
+      <ol>
+        <li>Keep the same layout: a sheet named <b>Sale Register</b> and a sheet named <b>Target</b> (headers as in your current file).</li>
+        <li>Choose the file, or drop it on the box. Large files take 10 to 30 seconds.</li>
+        <li>The new data stays in this browser. Use "Restore original" to go back to the file the dashboard was built from.</li>
+      </ol>
+      <div class="upmsg" id="upMsg" role="status"></div>
+    </div>
+    <div class="drop" id="drop">
+      <div>Drop the .xlsx here</div>
+      <label class="btn" for="file">Choose file</label>
+      <input type="file" id="file" class="vh" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      <button class="btn ghost" id="resetBtn" hidden>Restore original data</button>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-tab="month">Month wise</button>
+    <button class="tab" role="tab" data-tab="branch">Branch wise</button>
+    <button class="tab" role="tab" data-tab="target">Target vs achieved</button>
+  </nav>
+
+  <div class="filters" id="filters"></div>
+  <div class="kpis" id="kpis"></div>
+  <div id="view"></div>
+</div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script>window.XLSX||document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>')</script>
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
